@@ -21,8 +21,8 @@ impl Default for RequestHeaderGenerator {
 }
 
 impl RequestHeaderGenerator {
-    pub fn new(x_appid: String, secret_generator: SecretGenerator) -> Result<Self> {
-        let Some(secret) = secret_generator.generate_plaintext() else {
+    pub fn new<T: IntoSecret>(x_appid: String, secret_input: T) -> Result<Self> {
+        let Some(secret) = secret_input.into_secret() else {
             return Err(Error::SecretGenerationError(
                 "Failed to generate secret".to_string(),
             ));
@@ -77,6 +77,22 @@ impl SecretGenerator {
         let key = age::x25519::Identity::from_str(&self.key).ok()?;
         let pl = age::decrypt(&key, &self.ciphertext).ok()?;
         String::from_utf8(pl).ok()
+    }
+}
+
+pub trait IntoSecret {
+    fn into_secret(self) -> Option<String>;
+}
+
+impl IntoSecret for String {
+    fn into_secret(self) -> Option<String> {
+        Some(self)
+    }
+}
+
+impl IntoSecret for SecretGenerator {
+    fn into_secret(self) -> Option<String> {
+        self.generate_plaintext()
     }
 }
 

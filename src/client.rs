@@ -19,8 +19,8 @@ use crate::{
     Result,
     error::Error,
     secret::{
+        IntoSecret,
         RequestHeaderGenerator,
-        SecretGenerator,
     },
 };
 
@@ -31,8 +31,8 @@ const BASE_URI: &str = "https://api.dandanplay.net";
 pub struct DanDanClient(ClientInner);
 
 impl DanDanClient {
-    pub fn init(x_appid: String, secret_generator: SecretGenerator) -> Result<()> {
-        let request_header_generator = RequestHeaderGenerator::new(x_appid, secret_generator)?;
+    pub fn init<T: IntoSecret>(x_appid: String, secret_input: T) -> Result<()> {
+        let request_header_generator = RequestHeaderGenerator::new(x_appid, secret_input)?;
         HEADER_GENERATOR
             .set(request_header_generator)
             .map_err(|_| Error::SecretGenerationError("Already initialized".into()))?;
