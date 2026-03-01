@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     sync::{
         LazyLock,
-        OnceLock,
+        RwLock,
     },
 };
 
@@ -24,7 +24,8 @@ use crate::{
     },
 };
 
-static HEADER_GENERATOR: OnceLock<RequestHeaderGenerator> = OnceLock::new();
+static HEADER_GENERATOR: LazyLock<RwLock<Option<RequestHeaderGenerator>>> =
+    LazyLock::new(|| RwLock::new(None));
 const BASE_URI: &str = "https://api.dandanplay.net";
 
 #[derive(Clone, Debug, Default)]
@@ -33,9 +34,10 @@ pub struct DanDanClient(ClientInner);
 impl DanDanClient {
     pub fn init<T: IntoSecret>(x_appid: String, secret_input: T) -> Result<()> {
         let request_header_generator = RequestHeaderGenerator::new(x_appid, secret_input)?;
-        HEADER_GENERATOR
-            .set(request_header_generator)
-            .map_err(|_| Error::SecretGenerationError("Already initialized".into()))?;
+        let mut guard = HEADER_GENERATOR.write().map_err(|_| {
+            Error::SecretGenerationError("Failed to lock header generator".to_string())
+        })?;
+        *guard = Some(request_header_generator);
         Ok(())
     }
 
@@ -102,14 +104,17 @@ impl<T: Request> IntoFuture for Route<T> {
             let mut request = self
                 .client
                 .request(T::METHOD, format!("{BASE_URI}{path}"))
-                .headers(
-                    HEADER_GENERATOR
-                        .get()
+                .headers({
+                    let guard = HEADER_GENERATOR.read().map_err(|_| {
+                        Error::SecretGenerationError("Failed to lock header generator".to_string())
+                    })?;
+                    guard
+                        .as_ref()
                         .ok_or(Error::SecretGenerationError(
                             "Header generator not initialized".into(),
                         ))?
-                        .header(&path)?,
-                );
+                        .header(&path)?
+                });
 
             if let Some(body) = self.kind.body() {
                 request = request.json(&body);
