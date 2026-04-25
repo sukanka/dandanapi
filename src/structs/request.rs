@@ -47,9 +47,39 @@ pub struct RequestComments {
     pub ch_convert: ChConvert,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub enum ChConvert {
     NONE = 0,
     SIMPLIFIED = 1,
     TRADITIONAL = 2,
+}
+
+impl serde::Serialize for ChConvert {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_i32(match self {
+            ChConvert::NONE => 0,
+            ChConvert::SIMPLIFIED => 1,
+            ChConvert::TRADITIONAL => 2,
+        })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ChConvert {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = i32::deserialize(deserializer)?;
+        match value {
+            0 => Ok(ChConvert::NONE),
+            1 => Ok(ChConvert::SIMPLIFIED),
+            2 => Ok(ChConvert::TRADITIONAL),
+            _ => Err(serde::de::Error::custom(format!(
+                "invalid ChConvert value: {value}"
+            ))),
+        }
+    }
 }
