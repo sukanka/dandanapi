@@ -26,7 +26,33 @@ use crate::{
 
 static HEADER_GENERATOR: LazyLock<RwLock<Option<RequestHeaderGenerator>>> =
     LazyLock::new(|| RwLock::new(None));
-const BASE_URI: &str = "https://api.dandanplay.net";
+
+const DEFAULT_BASE_URI: &str = "https://api.dandanplay.net";
+
+static CUSTOM_BASE_URI: LazyLock<RwLock<Option<String>>> =
+    LazyLock::new(|| RwLock::new(None));
+
+fn base_uri() -> Cow<'static, str> {
+    CUSTOM_BASE_URI
+        .read()
+        .ok()
+        .and_then(|guard| guard.clone().map(Cow::Owned))
+        .unwrap_or(Cow::Borrowed(DEFAULT_BASE_URI))
+}
+
+/// Set a custom base URL for the DanDanAPI-compatible server.
+/// Pass an empty string to reset to the default `https://api.dandanplay.net`.
+pub fn set_base_uri(uri: &str) -> Result<()> {
+    let mut guard = CUSTOM_BASE_URI.write().map_err(|_| {
+        Error::SecretGenerationError("Failed to lock base URI".to_string())
+    })?;
+    *guard = if uri.is_empty() {
+        None
+    } else {
+        Some(uri.trim_end_matches('/').to_string())
+    };
+    Ok(())
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct DanDanClient(ClientInner);
@@ -103,7 +129,7 @@ impl<T: Request> IntoFuture for Route<T> {
 
             let mut request = self
                 .client
-                .request(T::METHOD, format!("{BASE_URI}{path}"))
+                .request(T::METHOD, format!("{}{path}", base_uri()))
                 .headers({
                     let guard = HEADER_GENERATOR.read().map_err(|_| {
                         Error::SecretGenerationError("Failed to lock header generator".to_string())
